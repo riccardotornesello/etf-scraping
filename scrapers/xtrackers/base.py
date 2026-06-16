@@ -19,6 +19,7 @@ class XtrackersScraper(BaseScraper):
         url = self.HOLDINGS_URL_TEMPLATE.format(isin=isin)
         df = pd.read_csv(url, sep=self.HOLDINGS_CSV_SEPARATOR, encoding="latin-1")
         df = rename_dataframe_columns(df, self.HOLDINGS_COLUMN_NAMES)
+        df = df.dropna()
         return df
 
     def _get_holdings_by_ticker(self, ticker: str) -> pd.DataFrame:

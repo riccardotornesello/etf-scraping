@@ -14,10 +14,10 @@ class ISharesBaseScraper(BaseScraper):
     HOLDINGS_CSV_DECIMAL: str
 
     def _fetch_listings(self) -> pd.DataFrame:
-        return rename_dataframe_columns(
-            pd.read_json(self.LISTINGS_URL).T,
-            self.LISTINGS_COLUMN_NAMES,
-        )
+        df = pd.read_json(self.LISTINGS_URL).T
+        df = rename_dataframe_columns(df, self.LISTINGS_COLUMN_NAMES)
+        df = df.dropna()
+        return df
 
     def _get_holdings_by_id(self, product_id: str) -> pd.DataFrame:
         url = self.HOLDINGS_URL_TEMPLATE.format(product_id=product_id)
@@ -30,6 +30,7 @@ class ISharesBaseScraper(BaseScraper):
             header=0,
         )
         df = rename_dataframe_columns(df, self.HOLDINGS_COLUMN_NAMES)
+        df = df.dropna()
         df["weight_in_etf"] = df["weight_in_etf"] / 100
         return df
 
