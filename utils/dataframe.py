@@ -15,6 +15,19 @@ class Column:
     col_type: ColumnType = ColumnType.STRING
 
 
+def rename_dataframe_columns(
+    df: pd.DataFrame,
+    column_names: dict[str, str],
+) -> pd.DataFrame:
+    # Keep only the columns we care about
+    df = df.reindex(columns=column_names.values())
+
+    # Rename columns to standard names
+    df = df.rename(columns={v: k for k, v in column_names.items()})
+
+    return df
+
+
 def prepare_dataframe(
     df: pd.DataFrame,
     columns: dict[str, Column],
@@ -26,7 +39,7 @@ def prepare_dataframe(
     )
 
     # Keep only the columns we care about
-    df = df.reindex(columns=columns.keys())
+    df = df.reindex(columns=set(c for c in columns.keys() if c))
 
     # Convert numeric columns to numeric types, coercing errors to NaN
     numeric_columns = [
@@ -36,14 +49,7 @@ def prepare_dataframe(
     ]
     df[numeric_columns] = df[numeric_columns].apply(pd.to_numeric)
 
-    # Convert text to uppercase
-    string_columns = [
-        col
-        for col, col_info in columns.items()
-        if col_info.col_type == ColumnType.STRING
-        and df[col].dtype in [object, "string"]
-    ]
-    df[string_columns] = df[string_columns].apply(lambda x: x.str.upper())
+    # TODO: format strings to uppercase
 
     # Set index if specified
     if index_col:

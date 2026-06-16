@@ -1,6 +1,7 @@
 import pandas as pd
 
 from scrapers.base import BaseScraper
+from utils.dataframe import rename_dataframe_columns
 
 
 class XtrackersScraper(BaseScraper):
@@ -17,7 +18,7 @@ class XtrackersScraper(BaseScraper):
     def _get_holdings_by_isin(self, isin: str) -> pd.DataFrame:
         url = self.HOLDINGS_URL_TEMPLATE.format(isin=isin)
         df = pd.read_csv(url, sep=self.HOLDINGS_CSV_SEPARATOR, encoding="latin-1")
-        df = df.rename(columns={v: k for k, v in self.HOLDINGS_COLUMN_NAMES.items()})
+        df = rename_dataframe_columns(df, self.HOLDINGS_COLUMN_NAMES)
         return df
 
     def _get_holdings_by_ticker(self, ticker: str) -> pd.DataFrame:

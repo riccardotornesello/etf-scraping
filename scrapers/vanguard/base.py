@@ -2,6 +2,7 @@ import pandas as pd
 import requests
 
 from scrapers.base import BaseScraper
+from utils.dataframe import rename_dataframe_columns
 
 
 class VanguardGraphQLScraper(BaseScraper):
@@ -21,9 +22,9 @@ class VanguardGraphQLScraper(BaseScraper):
         "asset_class": "securityType",
         "market_value": "marketValueBaseCurrency",  # TODO: check
         "weight": "marketValuePercentage",
-        "notional_value": None,  # TODO: maybe marketValueBaseCurrency / quantity?
+        # TODO: "notional_value" maybe marketValueBaseCurrency / quantity?
         "amount": "quantity",  # TODO: check
-        "price": None,  # TODO: maybe marketValueBaseCurrency / quantity?
+        # TODO: "price" maybe marketValueBaseCurrency / quantity?
         "location": "bloombergIsoCountry",
     }
 
@@ -104,6 +105,7 @@ class VanguardGraphQLScraper(BaseScraper):
 
         # Extract portIds from listings page HTML
         listings_page_req = requests.get(self.LISTINGS_PAGE)
+        listings_page_req.raise_for_status()
         listings_page_html = listings_page_req.text
 
         port_ids_start_string = '"portIds":"'
@@ -123,6 +125,7 @@ class VanguardGraphQLScraper(BaseScraper):
                 "query": self.LISTINGS_QUERY,
             },
         )
+        resp.raise_for_status()
 
         data = resp.json()
         data = data["data"]["funds"]
@@ -136,7 +139,7 @@ class VanguardGraphQLScraper(BaseScraper):
                     break
 
         df = pd.DataFrame(data)
-        df = df.rename(columns={v: k for k, v in self.LISTINGS_COLUMN_NAMES.items()})
+        df = rename_dataframe_columns(df, self.LISTINGS_COLUMN_NAMES)
         return df
 
     def _get_holdings_by_id(self, id: str) -> pd.DataFrame:
@@ -158,18 +161,20 @@ class VanguardGraphQLScraper(BaseScraper):
                     "query": self.HOLDINGS_QUERY,
                 },
             )
+            resp.raise_for_status()
+
             data = resp.json()
             holdings = data["data"]["borHoldings"][0]["holdings"]["items"]
             last_item_key = data["data"]["borHoldings"][0]["holdings"]["lastItemKey"]
             df = pd.concat([df, pd.DataFrame(holdings)], ignore_index=True)
 
-        df = df.rename(columns={v: k for k, v in self.HOLDINGS_COLUMN_NAMES.items()})
+        df = rename_dataframe_columns(df, self.HOLDINGS_COLUMN_NAMES)
         df["weight"] = df["weight"] / 100  # Convert percentage to decimal
         return df
 
     def _get_holdings_by_isin(self, isin: str) -> pd.DataFrame:
         listings = self.get_listings()
-        product_id = listings.loc[isin, "portId"]
+        product_id = listings.loc[isin, "internal_id"]
         return self._get_holdings_by_id(product_id)
 
     def _get_holdings_by_ticker(self, ticker: str) -> pd.DataFrame:
