@@ -140,6 +140,7 @@ class VanguardGraphQLScraper(BaseScraper):
 
         df = pd.DataFrame(data)
         df = rename_dataframe_columns(df, self.LISTINGS_COLUMN_NAMES)
+        df = df.dropna()
         return df
 
     def _get_holdings_by_id(self, id: str) -> pd.DataFrame:
@@ -169,6 +170,7 @@ class VanguardGraphQLScraper(BaseScraper):
             df = pd.concat([df, pd.DataFrame(holdings)], ignore_index=True)
 
         df = rename_dataframe_columns(df, self.HOLDINGS_COLUMN_NAMES)
+        df = df.dropna()
         df["weight"] = df["weight"] / 100  # Convert percentage to decimal
         return df
 
