@@ -8,6 +8,7 @@ class ISharesItScraper(ISharesBaseScraper):
         "name": "fundName",
         "isin": "isin",
         "ticker": "localExchangeTicker",
+        "ter": "ter_r",
     }
 
     HOLDINGS_URL_TEMPLATE = "https://www.ishares.com/it/investitore-privato/it/prodotti/{product_id}/fund/1506575546154.ajax?fileType=csv"

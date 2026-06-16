@@ -1,7 +1,7 @@
 import pandas as pd
 
 from scrapers.base import BaseScraper
-from utils.dataframe import Column
+from utils.dataframe import Column, rename_dataframe_columns
 
 
 class ISharesBaseScraper(BaseScraper):
@@ -14,9 +14,10 @@ class ISharesBaseScraper(BaseScraper):
     HOLDINGS_CSV_DECIMAL: str
 
     def _fetch_listings(self) -> pd.DataFrame:
-        df = pd.read_json(self.LISTINGS_URL).T
-        df = df.rename(columns={v: k for k, v in self.LISTINGS_COLUMN_NAMES.items()})
-        return df
+        return rename_dataframe_columns(
+            pd.read_json(self.LISTINGS_URL).T,
+            self.LISTINGS_COLUMN_NAMES,
+        )
 
     def _get_holdings_by_id(self, product_id: str) -> pd.DataFrame:
         url = self.HOLDINGS_URL_TEMPLATE.format(product_id=product_id)
@@ -28,16 +29,16 @@ class ISharesBaseScraper(BaseScraper):
             skiprows=2,
             header=0,
         )
-        df = df.rename(columns={v: k for k, v in self.HOLDINGS_COLUMN_NAMES.items()})
+        df = rename_dataframe_columns(df, self.HOLDINGS_COLUMN_NAMES)
         df["weight_in_etf"] = df["weight_in_etf"] / 100
         return df
 
     def _get_holdings_by_isin(self, isin: str) -> pd.DataFrame:
         listings = self.get_listings()
-        product_id = listings.loc[isin, "product_id"]
+        product_id = listings.loc[isin, "internal_id"]
         return self._get_holdings_by_id(product_id)
 
     def _get_holdings_by_ticker(self, ticker: str) -> pd.DataFrame:
         listings = self.get_listings()
-        product_id = listings[listings["ticker"] == ticker].iloc[0]["product_id"]
+        product_id = listings[listings["ticker"] == ticker].iloc[0]["internal_id"]
         return self._get_holdings_by_id(product_id)
