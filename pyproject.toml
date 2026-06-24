@@ -30,15 +30,12 @@ Homepage = "https://github.com/riccardotornesello/etf-scraping"
 Repository = "https://github.com/riccardotornesello/etf-scraping"
 Issues = "https://github.com/riccardotornesello/etf-scraping/issues"
 
-[project.optional-dependencies]
-app = [
-    "streamlit>=1.58.0",
-    "plotly>=6.8.0",
-]
-
 [dependency-groups]
 dev = [
     "ruff>=0.15.17",
+    "streamlit>=1.58.0",
+    "plotly>=6.8.0",
+    "pycountry>=24.6.1",
 ]
 
 [build-system]

@@ -1,279 +1,241 @@
-import sys
-from pathlib import Path
-
+import streamlit as st
 import pandas as pd
 import plotly.express as px
-import streamlit as st
+import pycountry
 
-# Allow running via `streamlit run app/app.py` from the repo root.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from portfolio_scraper.etf import (  # noqa: E402
+from portfolio_scraper.etf import (
     ISharesItScraper,
-    VanguardItScraper,
     XtrackersItScraper,
+    VanguardItScraper,
 )
 
-SCRAPERS: dict[str, type] = {
-    "iShares (IT)": ISharesItScraper,
-    "Vanguard (IT)": VanguardItScraper,
-    "Xtrackers (IT)": XtrackersItScraper,
-}
 
-PORTFOLIO_COLUMNS = ["isin", "scraper", "value"]
-
-
-st.set_page_config(page_title="ETF Portfolio Analyzer", page_icon="📊", layout="wide")
+def alpha2_to_alpha3(code: str) -> str | None:
+    """Convert an ISO 3166-1 alpha-2 country code to alpha-3 for the map."""
+    try:
+        country = pycountry.countries.get(alpha_2=str(code).upper())
+        return country.alpha_3 if country else None
+    except (KeyError, AttributeError):
+        return None
 
 
-def empty_portfolio() -> pd.DataFrame:
-    return pd.DataFrame(
-        {
-            "isin": pd.Series(dtype="str"),
-            "scraper": pd.Series(dtype="str"),
-            "value": pd.Series(dtype="float"),
-        }
+def alpha2_to_name(code: str) -> str:
+    """Human-readable country name for an ISO 3166-1 alpha-2 code."""
+    try:
+        country = pycountry.countries.get(alpha_2=str(code).upper())
+        return country.name if country else str(code)
+    except (KeyError, AttributeError):
+        return str(code)
+
+
+############################
+# LAYOUT
+############################
+st.set_page_config(
+    page_title="Portfolio scraper",
+    page_icon="💵",
+    layout="wide",
+)
+
+############################
+# SESSION STATE
+############################
+if "etfs" not in st.session_state:
+    st.session_state.etfs = pd.DataFrame(columns=["ISIN", "Scraper", "Value"])
+if "scrapers" not in st.session_state:
+    st.session_state.scrapers = {
+        "iShares (IT)": ISharesItScraper(),
+        "Xtrackers (IT)": XtrackersItScraper(),
+        "Vanguard (IT)": VanguardItScraper(),
+    }
+if "holdings" not in st.session_state:
+    st.session_state.holdings = None
+
+
+############################
+# APP
+############################
+st.title("💵 Portfolio scraper")
+st.caption("Scrape the portfolio of ETFs and analyze its composition.")
+
+st.header("Portfolio")
+
+with st.form("form_add_etf"):
+    col1, col2, col3 = st.columns(3)
+    isin = col1.text_input("ISIN")
+    scraper = col2.selectbox("Scraper", list(st.session_state.scrapers.keys()))
+    value = col3.number_input("Value (EUR)", step=0.01)
+
+    add = st.form_submit_button("Add", use_container_width=True)
+
+if add:
+    st.session_state.etfs = pd.concat(
+        [
+            st.session_state.etfs,
+            pd.DataFrame({"ISIN": [isin], "Scraper": [scraper], "Value": [value]}),
+        ],
+        ignore_index=True,
     )
+    st.session_state.holdings = None  # reset holdings when a new ETF is added
+
+    st.success(f"Added ETF {isin} with value {value} EUR using scraper {scraper}.")
+
+# Import / export
+col_imp, col_exp = st.columns(2)
+
+uploaded = col_imp.file_uploader("Import ETFs (CSV)", type="csv")
+if uploaded is not None:
+    imported = pd.read_csv(uploaded)
+    missing = {"ISIN", "Scraper", "Value"} - set(imported.columns)
+    if missing:
+        col_imp.error(f"Missing columns in CSV: {', '.join(sorted(missing))}.")
+    else:
+        st.session_state.etfs = imported[["ISIN", "Scraper", "Value"]].copy()
+        st.session_state.holdings = None
+        col_imp.success(f"Imported {len(imported)} ETFs.")
+
+col_exp.download_button(
+    "Export ETFs (CSV)",
+    data=st.session_state.etfs.to_csv(index=False).encode("utf-8"),
+    file_name="etfs.csv",
+    mime="text/csv",
+    use_container_width=True,
+    disabled=st.session_state.etfs.empty,
+)
+
+# Editable table with row deletion
+edited = st.data_editor(
+    st.session_state.etfs,
+    hide_index=True,
+    num_rows="dynamic",
+    use_container_width=True,
+    column_config={
+        "Scraper": st.column_config.SelectboxColumn(
+            options=list(st.session_state.scrapers.keys())
+        ),
+        "Value": st.column_config.NumberColumn(step=0.01),
+    },
+    key="etf_editor",
+)
+if not edited.equals(st.session_state.etfs):
+    st.session_state.etfs = edited.reset_index(drop=True)
+    st.session_state.holdings = None  # reset holdings when the table changes
+    st.rerun()
 
 
-if "portfolio" not in st.session_state:
-    st.session_state.portfolio = empty_portfolio()
+if not st.session_state.etfs.empty:
+    st.divider()
+    st.header("Scraping")
 
+    scrape = st.button("Scrape ETFs", use_container_width=True)
+    if scrape:
+        with st.status("Elaboration", expanded=True) as status:
+            holdings = []
+            for _, row in st.session_state.etfs.iterrows():
+                status.update(
+                    label=f"Scraping {row['ISIN']} with {row['Scraper']}...",
+                    state="running",
+                )
+                status.text(f"Scraping {row['ISIN']} with {row['Scraper']}...")
 
-@st.cache_data(show_spinner=False)
-def scrape_holdings(scraper_name: str, isin: str) -> pd.DataFrame:
-    """Fetch a single ETF holdings dataframe. Cached per (scraper, isin)."""
-    scraper = SCRAPERS[scraper_name]()
-    return scraper.get_holdings_by_isin(isin.strip().upper())
+                scraper = st.session_state.scrapers[row["Scraper"]]
+                etf_holdings = scraper.get_holdings_by_isin(row["ISIN"])
+                etf_holdings["etf_value"] = row["Value"]
+                holdings.append(etf_holdings)
 
+            holdings_df = pd.concat(holdings, ignore_index=True)
+            holdings_df["value_in_portfolio"] = (
+                holdings_df["weight_in_etf"].fillna(0) * holdings_df["etf_value"]
+            )
 
-def build_combined(portfolio: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
-    """
-    Scrape every ETF, weight its holdings by the ETF portfolio fraction and
-    concatenate into one dataframe. Returns (combined_df, errors).
-    """
-    rows = portfolio.dropna(subset=["isin", "scraper", "value"])
-    rows = rows[rows["isin"].str.strip() != ""]
-    if rows.empty:
-        return pd.DataFrame(), []
+            st.session_state.holdings = holdings_df
+            status.update(label="Scraping complete!", state="complete", expanded=False)
 
-    total_value = rows["value"].astype(float).sum()
-    if total_value <= 0:
-        return pd.DataFrame(), ["Total value must be greater than zero."]
+if st.session_state.holdings is not None:
+    st.divider()
+    st.header("Analysis")
 
-    frames: list[pd.DataFrame] = []
-    errors: list[str] = []
-    for _, row in rows.iterrows():
-        isin = str(row["isin"]).strip().upper()
-        scraper_name = row["scraper"]
-        if scraper_name not in SCRAPERS:
-            errors.append(f"{isin}: invalid scraper '{scraper_name}'.")
+    # Sidebar filters
+    holdings = st.session_state.holdings
+
+    st.sidebar.header("Filters")
+    filter_columns = {
+        "asset_class": "Asset class",
+        "sector": "Sector",
+        "location": "Country",
+        "currency": "Currency",
+        "exchange": "Exchange",
+    }
+    for column, label in filter_columns.items():
+        if column not in holdings.columns:
             continue
-        etf_fraction = float(row["value"]) / total_value
-        try:
-            holdings = scrape_holdings(scraper_name, isin).copy()
-        except Exception as exc:  # noqa: BLE001 - surface any scrape failure to the UI
-            errors.append(f"{isin} ({scraper_name}): {exc}")
+        options = sorted(holdings[column].dropna().unique().tolist())
+        if not options:
             continue
+        selected = st.sidebar.multiselect(label, options)
+        if selected:
+            holdings = holdings[holdings[column].isin(selected)]
 
-        holdings["etf_isin"] = isin
-        holdings["etf_scraper"] = scraper_name
-        holdings["etf_value"] = float(row["value"])
-        holdings["etf_fraction"] = etf_fraction
-        holdings["portfolio_weight"] = (
-            pd.to_numeric(holdings["weight_in_etf"], errors="coerce") * etf_fraction
+    if holdings.empty:
+        st.warning("No holdings match the current filters.")
+        st.stop()
+
+    st.subheader("Composition")
+
+    def composition_pie(column: str, title: str):
+        agg = (
+            holdings.assign(**{column: holdings[column].fillna("Unknown")})
+            .groupby(column, as_index=False)["value_in_portfolio"]
+            .sum()
+            .sort_values("value_in_portfolio", ascending=False)
         )
-        frames.append(holdings)
+        fig = px.pie(
+            agg, names=column, values="value_in_portfolio", title=title, hole=0.4
+        )
+        fig.update_traces(textposition="inside", textinfo="percent+label")
+        return fig
 
-    if not frames:
-        return pd.DataFrame(), errors
-
-    combined = pd.concat(frames, ignore_index=True)
-    return combined, errors
-
-
-def portfolio_tab() -> None:
-    st.subheader("Portfolio composition")
-    st.caption(
-        "Add the ETFs with ISIN, scraper and value in euro. Each ETF weight in "
-        "the portfolio is its value divided by the total value."
-    )
-
-    edited = st.data_editor(
-        st.session_state.portfolio,
-        num_rows="dynamic",
+    col1, col2, col3 = st.columns(3)
+    col1.plotly_chart(
+        composition_pie("location", "By country"),
         use_container_width=True,
-        hide_index=True,
-        column_config={
-            "isin": st.column_config.TextColumn("ISIN", required=True),
-            "scraper": st.column_config.SelectboxColumn(
-                "Scraper", options=list(SCRAPERS.keys()), required=True
-            ),
-            "value": st.column_config.NumberColumn(
-                "Value (€)", min_value=0.0, step=100.0, required=True
-            ),
-        },
     )
-    st.session_state.portfolio = edited.reset_index(drop=True)
-
-    total = edited["value"].dropna().sum()
-    if total > 0:
-        st.metric("Total value", f"€ {total:,.2f}")
+    col2.plotly_chart(
+        composition_pie("sector", "By sector"),
+        use_container_width=True,
+    )
+    col3.plotly_chart(
+        composition_pie("asset_class", "By asset class"),
+        use_container_width=True,
+    )
 
     st.divider()
-    col_imp, col_exp = st.columns(2)
+    st.subheader("Geographic distribution")
 
-    with col_exp:
-        st.markdown("**Export**")
-        csv = edited.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            "Download CSV",
-            data=csv,
-            file_name="portfolio.csv",
-            mime="text/csv",
-            use_container_width=True,
-        )
-
-    with col_imp:
-        st.markdown("**Import**")
-        uploaded = st.file_uploader(
-            "Upload CSV", type="csv", label_visibility="collapsed"
-        )
-        if uploaded is not None:
-            try:
-                df = pd.read_csv(uploaded)
-                missing = [c for c in PORTFOLIO_COLUMNS if c not in df.columns]
-                if missing:
-                    st.error(f"Missing columns in CSV: {', '.join(missing)}")
-                else:
-                    st.session_state.portfolio = df[PORTFOLIO_COLUMNS].reset_index(
-                        drop=True
-                    )
-                    st.success("Portfolio imported.")
-                    st.rerun()
-            except Exception as exc:  # noqa: BLE001
-                st.error(f"Error reading CSV: {exc}")
-
-
-def filter_holdings(df: pd.DataFrame) -> pd.DataFrame:
-    st.markdown("**Filters**")
-    c1, c2, c3, c4 = st.columns(4)
-
-    def multiselect_for(col: str, label: str, container) -> list:
-        if col not in df.columns:
-            return []
-        options = sorted(df[col].dropna().unique().tolist())
-        return container.multiselect(label, options, key=f"filter_{col}")
-
-    sectors = multiselect_for("sector", "Sector", c1)
-    assets = multiselect_for("asset_class", "Asset class", c2)
-    locations = multiselect_for("location", "Country", c3)
-    etfs = multiselect_for("etf_isin", "ETF", c4)
-    name_query = st.text_input("Search by name", key="filter_name")
-
-    out = df
-    if sectors:
-        out = out[out["sector"].isin(sectors)]
-    if assets:
-        out = out[out["asset_class"].isin(assets)]
-    if locations:
-        out = out[out["location"].isin(locations)]
-    if etfs:
-        out = out[out["etf_isin"].isin(etfs)]
-    if name_query:
-        out = out[out["name"].str.contains(name_query, case=False, na=False)]
-    return out
-
-
-def pie_chart(df: pd.DataFrame, group_col: str, title: str) -> None:
-    if group_col not in df.columns or df.empty:
-        st.info(f"No data for {title.lower()}.")
-        return
-    agg = (
-        df.groupby(group_col, dropna=True)["portfolio_weight"]
+    geo = (
+        holdings.dropna(subset=["location"])
+        .groupby("location", as_index=False)["value_in_portfolio"]
         .sum()
-        .reset_index()
-        .sort_values("portfolio_weight", ascending=False)
     )
-    agg = agg[agg["portfolio_weight"] > 0]
-    if agg.empty:
-        st.info(f"No data for {title.lower()}.")
-        return
-    fig = px.pie(agg, names=group_col, values="portfolio_weight", title=title, hole=0.3)
-    fig.update_traces(textposition="inside", textinfo="percent+label")
-    st.plotly_chart(fig, use_container_width=True)
+    geo["iso_alpha3"] = geo["location"].map(alpha2_to_alpha3)
+    geo["country"] = geo["location"].map(alpha2_to_name)
+    geo = geo.dropna(subset=["iso_alpha3"])
 
-
-def analysis_tab() -> None:
-    st.subheader("Holdings analysis")
-
-    if st.button("🔍 Analyze portfolio", type="primary"):
-        with st.spinner("Scraping ETFs..."):
-            combined, errors = build_combined(st.session_state.portfolio)
-        st.session_state.combined = combined
-        st.session_state.errors = errors
-
-    if "combined" not in st.session_state:
-        st.info("Fill in the portfolio and press *Analyze portfolio*.")
-        return
-
-    for err in st.session_state.get("errors", []):
-        st.error(err)
-
-    combined = st.session_state.combined
-    if combined.empty:
-        st.warning("No holdings available.")
-        return
-
-    filtered = filter_holdings(combined)
-
-    total_weight = filtered["portfolio_weight"].sum()
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Holdings", f"{len(filtered):,}")
-    m2.metric("ETFs", filtered["etf_isin"].nunique())
-    m3.metric("Covered weight", f"{total_weight:.2%}")
+    if geo.empty:
+        st.info("No country data available for the current holdings.")
+    else:
+        fig_map = px.choropleth(
+            geo,
+            locations="iso_alpha3",
+            color="value_in_portfolio",
+            hover_name="country",
+            color_continuous_scale="Blues",
+            labels={"value_in_portfolio": "Invested (EUR)"},
+        )
+        fig_map.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+        st.plotly_chart(fig_map, use_container_width=True)
 
     st.divider()
-    st.markdown("**Composition**")
-    g1, g2, g3 = st.columns(3)
-    with g1:
-        pie_chart(filtered, "sector", "By sector")
-    with g2:
-        pie_chart(filtered, "asset_class", "By asset class")
-    with g3:
-        pie_chart(filtered, "location", "By country")
+    st.subheader("Holdings")
 
-    st.divider()
-    st.markdown("**Holdings table**")
-    display = filtered.sort_values("portfolio_weight", ascending=False)
-    st.dataframe(
-        display,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "weight_in_etf": st.column_config.NumberColumn(
-                "Weight in ETF", format="percent"
-            ),
-            "portfolio_weight": st.column_config.NumberColumn(
-                "Portfolio weight", format="percent"
-            ),
-            "etf_fraction": st.column_config.NumberColumn(
-                "ETF fraction", format="percent"
-            ),
-            "etf_value": st.column_config.NumberColumn("ETF value (€)", format="%.2f"),
-        },
-    )
-    st.download_button(
-        "Download holdings (CSV)",
-        data=display.to_csv(index=False).encode("utf-8"),
-        file_name="holdings.csv",
-        mime="text/csv",
-    )
-
-
-st.title("📊 ETF Portfolio Analyzer")
-tab_portfolio, tab_analysis = st.tabs(["Portfolio", "Analysis"])
-with tab_portfolio:
-    portfolio_tab()
-with tab_analysis:
-    analysis_tab()
+    st.dataframe(holdings, hide_index=True)
