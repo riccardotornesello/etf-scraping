@@ -2,7 +2,7 @@ import pandas as pd
 
 from portfolio_scraper.etf.base import BaseEtfScraper
 from portfolio_scraper.utils.asset_class import ishares_to_asset_class
-from portfolio_scraper.utils.country import country_to_iso
+from portfolio_scraper.utils.country import country_name_to_alpha_2
 from portfolio_scraper.utils.dataframe import Column, rename_dataframe_columns
 from portfolio_scraper.utils.exchange import exchange_to_mic
 from portfolio_scraper.utils.sector import italian_to_gics
@@ -46,7 +46,7 @@ class ISharesBaseEtfScraper(BaseEtfScraper):
         )
         df["weight_in_etf"] = pd.to_numeric(weights, errors="coerce") / 100
         df["location"] = df["location"].map(
-            country_to_iso,
+            country_name_to_alpha_2,
             na_action="ignore",
             language=self.COUNTRY_LANGUAGE,
         )

@@ -1,7 +1,7 @@
 import pandas as pd
 
 from portfolio_scraper.etf.base import BaseEtfScraper
-from portfolio_scraper.utils.country import country_to_iso
+from portfolio_scraper.utils.country import country_name_to_alpha_2
 from portfolio_scraper.utils.dataframe import rename_dataframe_columns
 from portfolio_scraper.utils.exchange import exchange_to_mic
 from portfolio_scraper.utils.sector import italian_to_gics
@@ -24,7 +24,7 @@ class XtrackersScraper(BaseEtfScraper):
         df = pd.read_csv(url, sep=self.HOLDINGS_CSV_SEPARATOR, encoding="utf-8")
         df = rename_dataframe_columns(df, self.HOLDINGS_COLUMN_NAMES)
         df["location"] = df["location"].map(
-            country_to_iso,
+            country_name_to_alpha_2,
             na_action="ignore",
             language=self.COUNTRY_LANGUAGE,
         )

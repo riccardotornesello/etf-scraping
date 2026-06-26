@@ -17,4 +17,4 @@ class XtrackersItScraper(XtrackersScraper):
     }
     HOLDINGS_CSV_SEPARATOR = ";"
 
-    COUNTRY_LANGUAGE = "ita"
+    COUNTRY_LANGUAGE = "it"
