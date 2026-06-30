@@ -6,7 +6,6 @@ from portfolio_scraper.utils.dataframe import (
     prepare_dataframe,
     Column,
     ColumnType,
-    rename_dataframe_columns,
 )
 
 
@@ -19,34 +18,14 @@ LISTINGS_COLUMNS: dict[str, Column] = {
     "profit_distribution_strategy": Column(),  # TODO: enum
 }
 
-HOLDINGS_COLUMNS: dict[str, Column] = {
-    # Basic information
-    "name": Column(),
-    "isin": Column(),
-    "ticker": Column(),
-    # ETF-specific information
-    "weight_in_etf": Column(col_type=ColumnType.NUMERIC),  # Decimal between 0 and 1
-    # Generic holding information
-    "sector": Column(),  # GICS sector name, None if not applicable (cash, derivatives)
-    "rating": Column(),
-    "asset_class": Column(),  # TODO: create an asset class enum
-    "total_market_value": Column(col_type=ColumnType.NUMERIC),
-    "total_notional_value": Column(col_type=ColumnType.NUMERIC),
-    "shares_amount": Column(col_type=ColumnType.NUMERIC),
-    "share_price": Column(col_type=ColumnType.NUMERIC),
-    "location": Column(),  # ISO 3166-1 alpha-2 country code
-    "exchange": Column(),  # MIC code (ISO 10383), None if unlisted
-    "currency": Column(),
-}
-
 
 class BaseEtfScraper(ABC):
     """
     Base class for ETF scrapers. Provides methods to fetch listings and holdings data.
     """
 
-    LISTINGS_COLUMN_NAMES: dict[str, str] = {}
-    HOLDINGS_COLUMN_NAMES: dict[str, str] = {}
+    LISTINGS_COLUMNS: dict[str, Column] = {}
+    HOLDINGS_COLUMNS: dict[str, Column] = {}
 
     listings_cache: pd.DataFrame | None = None
 
@@ -73,7 +52,6 @@ class BaseEtfScraper(ABC):
         """
         df = self._fetch_raw_holdings_by_id(internal_id)
         df = self._prepare_holdings(df)
-        df = prepare_dataframe(df, HOLDINGS_COLUMNS)
         return df
 
     def get_holdings_by_isin(self, isin: str) -> pd.DataFrame:
@@ -82,7 +60,6 @@ class BaseEtfScraper(ABC):
         """
         df = self._fetch_raw_holdings_by_isin(isin)
         df = self._prepare_holdings(df)
-        df = prepare_dataframe(df, HOLDINGS_COLUMNS)
         return df
 
     def get_holdings_by_ticker(self, ticker: str) -> pd.DataFrame:
@@ -91,7 +68,6 @@ class BaseEtfScraper(ABC):
         """
         df = self._fetch_raw_holdings_by_ticker(ticker)
         df = self._prepare_holdings(df)
-        df = prepare_dataframe(df, HOLDINGS_COLUMNS)
         return df
 
     @abstractmethod
@@ -107,8 +83,7 @@ class BaseEtfScraper(ABC):
         Rename the columns and update the output.
         Can be overridden by subclasses for custom processing.
         """
-        df = rename_dataframe_columns(df, self.LISTINGS_COLUMN_NAMES)
-        df = df.dropna(how="all")
+        df = prepare_dataframe(df, self.LISTINGS_COLUMNS)
         return df
 
     @abstractmethod
@@ -128,6 +103,5 @@ class BaseEtfScraper(ABC):
         Rename the columns and update the output.
         Can be overridden by subclasses for custom processing.
         """
-        df = rename_dataframe_columns(df, self.HOLDINGS_COLUMN_NAMES)
-        df = df.dropna(how="all")
+        df = prepare_dataframe(df, self.HOLDINGS_COLUMNS)
         return df

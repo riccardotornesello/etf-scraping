@@ -1,20 +1,32 @@
-from portfolio_scraper.etf.xtrackers.base import XtrackersScraper
+from portfolio_scraper.etf.xtrackers.base import XtrackersBaseEtfScraper
+from portfolio_scraper.utils.sector import GICSector
 
 
-class XtrackersItScraper(XtrackersScraper):
+class XtrackersItScraper(XtrackersBaseEtfScraper):
+    COUNTRY_LANGUAGE = "it"
+
     HOLDINGS_URL_TEMPLATE = (
         "https://etf.dws.com/etfdata/export/ITA/ITA/csv/product/constituent/{isin}/"
     )
-    HOLDINGS_COLUMN_NAMES: dict[str, str] = {
+    HOLDINGS_COLUMNS_NAMES: dict[str, str] = {
         "name": "Constituent Name",
         "isin": "Constituent ISIN",
-        "sector": "Constituent Industry Classification Name",
         "weight_in_etf": "Constituent Weighting",
-        "location": "Constituent Country",
+        "gics_sector": "Constituent Industry Classification Name",
+        "country_alpha2": "Constituent Country",
         "exchange": "Constituent Main Exchange Name",
         "currency": "Constituent Currency ISO Code",
         "rating": "Constituent Rating",
     }
-    HOLDINGS_CSV_SEPARATOR = ";"
-
-    COUNTRY_LANGUAGE = "it"
+    SECTORS_MAP: dict[str, GICSector] = {
+        "AEROSPAZIO E DIFESA": GICSector.INDUSTRIALS,
+        "APPARECCHIATURE E STRUMENTI ELETTRONICI ": GICSector.INFORMATION_TECHNOLOGY,
+        "COMPONENTI E APPARECCHIATURE ELETTRICHE": GICSector.INDUSTRIALS,
+        "MACCHINE PER L'EDILIZIA E AUTOCARRI PESANTI": GICSector.INDUSTRIALS,
+        "TRASMISSIONI VIA CAVO E VIA SATELLITE": GICSector.COMMUNICATION_SERVICES,
+        "SCONOSCIUTA": None,
+        "SERVIZI DI CONSULENZA IT E ALTRI SERVIZI CORRELATI": GICSector.INFORMATION_TECHNOLOGY,
+        "SERVIZI DI MANUTENZIONE E AMBIENTALI": GICSector.INDUSTRIALS,
+        "SOFTWARE DI SISTEMA": GICSector.INFORMATION_TECHNOLOGY,
+        "VETTORI ALTERNATIVI": GICSector.INDUSTRIALS,
+    }

@@ -161,10 +161,9 @@ if st.session_state.holdings is not None:
     st.sidebar.header("Filters")
     filter_columns = {
         "asset_class": "Asset class",
-        "sector": "Sector",
-        "location": "Country",
+        "gics_sector": "Sector",
+        "country_alpha2": "Country",
         "currency": "Currency",
-        "exchange": "Exchange",
     }
     for column, label in filter_columns.items():
         if column not in holdings.columns:
@@ -197,11 +196,11 @@ if st.session_state.holdings is not None:
 
     col1, col2, col3 = st.columns(3)
     col1.plotly_chart(
-        composition_pie("location", "By country"),
+        composition_pie("country_alpha2", "By country"),
         use_container_width=True,
     )
     col2.plotly_chart(
-        composition_pie("sector", "By sector"),
+        composition_pie("gics_sector", "By sector"),
         use_container_width=True,
     )
     col3.plotly_chart(
@@ -213,12 +212,12 @@ if st.session_state.holdings is not None:
     st.subheader("Geographic distribution")
 
     geo = (
-        holdings.dropna(subset=["location"])
-        .groupby("location", as_index=False)["value_in_portfolio"]
+        holdings.dropna(subset=["country_alpha2"])
+        .groupby("country_alpha2", as_index=False)["value_in_portfolio"]
         .sum()
     )
-    geo["iso_alpha3"] = geo["location"].map(alpha2_to_alpha3)
-    geo["country"] = geo["location"].map(alpha2_to_name)
+    geo["iso_alpha3"] = geo["country_alpha2"].map(alpha2_to_alpha3)
+    geo["country"] = geo["country_alpha2"].map(alpha2_to_name)
     geo = geo.dropna(subset=["iso_alpha3"])
 
     if geo.empty:

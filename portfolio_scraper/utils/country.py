@@ -1,13 +1,10 @@
-import logging
+import functools
 import gettext
 
 import pycountry
 
 
-_log = logging.getLogger(__name__)
-
-
-WITHOUT_TRANSLATION = {None, "-", "", "UNIONE EUROPEA"}
+WITHOUT_CODE = {"it": {"UNIONE EUROPEA"}}
 FIXES = {
     "it": {
         "COREA": "KOREA, DEMOCRATIC PEOPLE'S REPUBLIC OF",
@@ -18,59 +15,38 @@ FIXES = {
 }
 
 
-def country_name_to_english(name: str, language: str) -> str | None:
-    name = name.strip().upper()
-
+def gen_translation_map(language: str) -> dict[str, str]:
     translation = gettext.translation(
         "iso3166-1",
         pycountry.LOCALES_DIR,
         languages=[language],
     )
-    # TODO: cache
+
     translation_map = {
         v.upper().strip(): k.upper().strip()
         for k, v in translation._catalog.items()
         if k and v
     }
-
-    translated = translation_map.get(name)
-
-    if not translated:
-        _log.warning(
-            "Unknown country name (not mapped to English): %r (%s)",
-            name,
-            language,
-        )
-        return None
-
-    return translated
+    translation_map.update(FIXES.get(language, {}))
+    return translation_map
 
 
-def country_name_to_alpha_2(name: str, language: str) -> str | None:
-    if not name:
-        return None
+@functools.cache
+def gen_country_to_alpha_2_map(language: str) -> dict[str, str]:
+    if language == "en":
+        return {
+            country.name.upper(): country.alpha_2 for country in pycountry.countries
+        }
 
-    name = name.strip().upper()
-
-    if name in WITHOUT_TRANSLATION:
-        return None
-
-    if name in FIXES.get(language, {}):
-        translated_name = FIXES[language][name]
-    else:
-        translated_name = country_name_to_english(name, language)
-
-    if not translated_name:
-        return f"__unknown_translation__{name}"
-
-    country = pycountry.countries.get(name=translated_name)
-
-    if not country:
-        _log.warning(
-            "Unknown country name (not mapped to ISO): %r (%s)",
-            translated_name,
-            language,
-        )
-        return f"__unknown_iso__{translated_name}"
-
-    return country.alpha_2
+    translation_map = gen_translation_map(language)
+    country_to_alpha_2 = {}
+    for name, english_name in translation_map.items():
+        country = pycountry.countries.get(name=english_name)
+        if country:
+            country_to_alpha_2[name] = country.alpha_2
+    country_to_alpha_2.update(
+        {name: None for name in WITHOUT_CODE.get(language, set())}
+    )
+    country_to_alpha_2[""] = None  # Handle empty string case
+    country_to_alpha_2["-"] = None  # Handle dash case
+    return country_to_alpha_2

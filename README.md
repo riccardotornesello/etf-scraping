@@ -30,7 +30,7 @@ from portfolio_scraper import ISharesItScraper
 scraper = ISharesItScraper()
 df = scraper.get_holdings_by_isin("IE00B6R52143")
 
-print(df[["name", "weight_in_etf", "sector", "location"]].head())
+print(df[["name", "weight_in_etf", "gics_sector", "country_alpha2"]].head())
 ```
 
 ## Usage
@@ -72,10 +72,10 @@ Every scraper exposes the same interface:
 | `isin`                                                                       | Holding ISIN                                      |
 | `ticker`                                                                     | Holding ticker                                    |
 | `weight_in_etf`                                                              | Weight inside the ETF, as a decimal (`0.05` = 5%) |
-| `sector`                                                                     | GICS sector name                                  |
+| `gics_sector`                                                                | GICS sector name                                  |
 | `asset_class`                                                                | Asset class (Equity, Bond, Cash, …)               |
 | `rating`                                                                     | Credit rating, when available                     |
-| `location`                                                                   | ISO 3166-1 alpha-2 country code                   |
+| `country_alpha2`                                                             | ISO 3166-1 alpha-2 country code                   |
 | `exchange`                                                                   | MIC code (ISO 10383), when listed                 |
 | `currency`                                                                   | Currency code                                     |
 | `total_market_value`, `total_notional_value`, `shares_amount`, `share_price` | Position figures, when available                  |
@@ -107,7 +107,7 @@ for scraper, isin, value in portfolio:
 combined = pd.concat(frames, ignore_index=True)
 
 # Allocation by sector across the whole portfolio
-by_sector = combined.groupby("sector")["portfolio_weight"].sum().sort_values(ascending=False)
+by_sector = combined.groupby("gics_sector")["portfolio_weight"].sum().sort_values(ascending=False)
 print(by_sector)
 ```
 

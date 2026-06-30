@@ -1,22 +1,71 @@
 import pandas as pd
 
 from portfolio_scraper.etf.base import BaseEtfScraper
-from portfolio_scraper.utils.asset_class import ishares_to_asset_class
-from portfolio_scraper.utils.country import country_name_to_alpha_2
-from portfolio_scraper.utils.dataframe import Column, rename_dataframe_columns
-from portfolio_scraper.utils.exchange import exchange_to_mic
-from portfolio_scraper.utils.sector import italian_to_gics
+from portfolio_scraper.utils.dataframe import Column, ColumnType, map_columns
+from portfolio_scraper.utils.country import gen_country_to_alpha_2_map
+from portfolio_scraper.utils.sector import GICSector
 
 
 class ISharesBaseEtfScraper(BaseEtfScraper):
-    LISTINGS_URL: str
-    LISTINGS_COLUMN_NAMES: dict[str, Column]
-    HOLDINGS_URL_TEMPLATE: str
-    HOLDINGS_COLUMN_NAMES: dict[str, str]
-    HOLDINGS_CSV_SEPARATOR: str
-    HOLDINGS_CSV_THOUSANDS: str
-    HOLDINGS_CSV_DECIMAL: str
     COUNTRY_LANGUAGE: str
+    LISTINGS_URL: str
+    HOLDINGS_URL_TEMPLATE: str
+
+    LISTINGS_COLUMNS_NAMES: dict[str, str]
+    HOLDINGS_COLUMNS_NAMES: dict[str, str]
+    SECTORS_MAP: dict[str, GICSector]
+
+    HOLDINGS_CSV_SEPARATOR = ","
+    HOLDINGS_CSV_THOUSANDS = "."
+    HOLDINGS_CSV_DECIMAL = ","
+
+    def __init__(self):
+        super().__init__()
+
+        self.LISTINGS_COLUMNS: dict[str, Column] = map_columns(
+            columns={
+                "internal_id": Column(),
+                "name": Column(),
+                "isin": Column(),
+                "ticker": Column(),
+                "ter": Column(
+                    formatter=lambda column: column.apply(
+                        lambda value: value["r"] if isinstance(value, dict) else None
+                    ),
+                ),
+            },
+            columns_names=self.LISTINGS_COLUMNS_NAMES,
+        )
+
+        self.HOLDINGS_COLUMNS: dict[str, Column] = map_columns(
+            columns={
+                "name": Column(),
+                "ticker": Column(),
+                "weight_in_etf": Column(
+                    col_type=ColumnType.NUMERIC,
+                    formatter=lambda column: (
+                        column.str.replace("%", "", regex=False)
+                        .str.replace(".", "", regex=False)
+                        .str.replace(",", ".", regex=False)
+                        .str.strip()
+                        .astype(float)
+                        .div(100)
+                    ),
+                ),
+                "gics_sector": Column(mapper=self.SECTORS_MAP),
+                "asset_class": Column(),
+                "total_market_value": Column(col_type=ColumnType.NUMERIC),
+                "total_notional_value": Column(col_type=ColumnType.NUMERIC),
+                "shares_amount": Column(col_type=ColumnType.NUMERIC),
+                "share_price": Column(col_type=ColumnType.NUMERIC),
+                "country_alpha2": Column(
+                    mapper=gen_country_to_alpha_2_map(self.COUNTRY_LANGUAGE)
+                ),
+                "exchange": Column(),
+                "currency": Column(),
+            },
+            columns_names=self.HOLDINGS_COLUMNS_NAMES,
+        )
 
     def _fetch_raw_listings(self) -> pd.DataFrame:
         return pd.read_json(self.LISTINGS_URL).T
@@ -42,28 +91,3 @@ class ISharesBaseEtfScraper(BaseEtfScraper):
         listings = self.get_listings()
         product_id = listings[listings["ticker"] == ticker].iloc[0]["internal_id"]
         return self._fetch_raw_holdings_by_id(product_id)
-
-    def _prepare_holdings(self, df: pd.DataFrame) -> pd.DataFrame:
-        df = rename_dataframe_columns(df, self.HOLDINGS_COLUMN_NAMES)
-        df = df.dropna(how="all")
-        weights = (
-            df["weight_in_etf"]
-            .astype(str)
-            .str.replace("%", "", regex=False)
-            .str.replace(".", "", regex=False)
-            .str.replace(",", ".", regex=False)
-            .str.strip()
-        )
-        df["weight_in_etf"] = pd.to_numeric(weights, errors="coerce") / 100
-        df["location"] = df["location"].map(
-            country_name_to_alpha_2,
-            na_action="ignore",
-            language=self.COUNTRY_LANGUAGE,
-        )
-        df["exchange"] = df["exchange"].map(exchange_to_mic, na_action="ignore")
-        df["sector"] = df["sector"].map(italian_to_gics, na_action="ignore")
-        df["asset_class"] = df["asset_class"].map(
-            ishares_to_asset_class,
-            na_action="ignore",
-        )
-        return df

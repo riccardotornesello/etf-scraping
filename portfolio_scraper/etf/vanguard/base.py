@@ -2,31 +2,42 @@ import pandas as pd
 import requests
 
 from portfolio_scraper.etf.base import BaseEtfScraper
-from portfolio_scraper.utils.asset_class import vanguard_to_asset_class
-from portfolio_scraper.utils.dataframe import rename_dataframe_columns
+from portfolio_scraper.utils.dataframe import Column, ColumnType, map_columns
+from portfolio_scraper.utils.sector import GICSector
+
+
+SECTORS_MAP: dict[str, GICSector] = {
+    "COMMUNICATION SERVICES": GICSector.COMMUNICATION_SERVICES,
+    "CONSUMER DISCRETIONARY": GICSector.CONSUMER_DISCRETIONARY,
+    "CONSUMER STAPLES": GICSector.CONSUMER_STAPLES,
+    "ENERGY": GICSector.ENERGY,
+    "FINANCIALS": GICSector.FINANCIALS,
+    "HEALTH CARE": GICSector.HEALTH_CARE,
+    "INDUSTRIALS": GICSector.INDUSTRIALS,
+    "INFORMATION TECHNOLOGY": GICSector.INFORMATION_TECHNOLOGY,
+    "MATERIALS": GICSector.MATERIALS,
+    "REAL ESTATE": GICSector.REAL_ESTATE,
+    "UTILITIES": GICSector.UTILITIES,
+}
 
 
 class VanguardGraphQLScraper(BaseEtfScraper):
     GRAPHQL_URL: str
     LISTINGS_PAGE: str
 
-    LISTINGS_COLUMN_NAMES: dict[str, str] = {
+    LISTINGS_COLUMNS_NAMES: dict[str, str] = {
         "internal_id": "portId",
         "name": "fundFullName",
         "isin": "isin",
     }
 
-    HOLDINGS_COLUMN_NAMES: dict[str, str] = {
-        "ticker": "ticker",
+    HOLDINGS_COLUMNS_NAMES: dict[str, str] = {
         "name": "issuerName",
-        "sector": "gicsSectorDescription",
-        "asset_class": "securityType",
-        "market_value": "marketValueBaseCurrency",  # TODO: check
+        "ticker": "ticker",
         "weight_in_etf": "marketValuePercentage",
-        # TODO: "notional_value" maybe marketValueBaseCurrency / quantity?
-        "amount": "quantity",  # TODO: check
-        # TODO: "price" maybe marketValueBaseCurrency / quantity?
-        "location": "bloombergIsoCountry",
+        "gics_sector": "gicsSectorDescription",
+        "asset_class": "securityType",
+        "country_alpha2": "bloombergIsoCountry",
     }
 
     LISTINGS_QUERY = """
@@ -100,10 +111,34 @@ class VanguardGraphQLScraper(BaseEtfScraper):
         }
     """
 
-    def _fetch_raw_listings(self) -> pd.DataFrame:
-        # TODO: extract TER from feesAndExpenses
-        # TODO: extract ticker from listings
+    def __init__(self):
+        super().__init__()
 
+        self.LISTINGS_COLUMNS: dict[str, Column] = map_columns(
+            columns={
+                "internal_id": Column(),
+                "name": Column(),
+                "isin": Column(),
+            },
+            columns_names=self.LISTINGS_COLUMNS_NAMES,
+        )
+
+        self.HOLDINGS_COLUMNS: dict[str, Column] = map_columns(
+            columns={
+                "name": Column(),
+                "ticker": Column(),
+                "weight_in_etf": Column(
+                    col_type=ColumnType.NUMERIC,
+                    formatter=lambda column: column.div(100),
+                ),
+                "gics_sector": Column(mapper=SECTORS_MAP),
+                "asset_class": Column(),
+                "country_alpha2": Column(),
+            },
+            columns_names=self.HOLDINGS_COLUMNS_NAMES,
+        )
+
+    def _fetch_raw_listings(self) -> pd.DataFrame:
         # Extract portIds from listings page HTML
         listings_page_req = requests.get(self.LISTINGS_PAGE)
         listings_page_req.raise_for_status()
@@ -177,12 +212,3 @@ class VanguardGraphQLScraper(BaseEtfScraper):
 
     def _fetch_raw_holdings_by_ticker(self, ticker: str) -> pd.DataFrame:
         raise NotImplementedError
-
-    def _prepare_holdings(self, df: pd.DataFrame) -> pd.DataFrame:
-        df = rename_dataframe_columns(df, self.HOLDINGS_COLUMN_NAMES)
-        df = df.dropna(how="all")
-        df["weight_in_etf"] = df["weight_in_etf"] / 100
-        df["asset_class"] = df["asset_class"].map(
-            vanguard_to_asset_class, na_action="ignore"
-        )
-        return df

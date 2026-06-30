@@ -1,110 +1,15 @@
-import logging
 from enum import Enum
-
-_log = logging.getLogger(__name__)
 
 
 class GICSector(str, Enum):
-    ENERGY = "Energy"
-    MATERIALS = "Materials"
-    INDUSTRIALS = "Industrials"
-    CONSUMER_DISCRETIONARY = "Consumer Discretionary"
-    CONSUMER_STAPLES = "Consumer Staples"
-    HEALTH_CARE = "Health Care"
-    FINANCIALS = "Financials"
-    INFORMATION_TECHNOLOGY = "Information Technology"
-    COMMUNICATION_SERVICES = "Communication Services"
-    UTILITIES = "Utilities"
-    REAL_ESTATE = "Real Estate"
-
-
-# Maps Italian sector names (iShares IT + Xtrackers IT) to GICSector.
-# Vanguard already returns standard GICS English names, no mapping needed.
-ITALIAN_TO_GICS: dict[str, GICSector] = {
-    # iShares IT
-    "Comunicazione": GICSector.COMMUNICATION_SERVICES,
-    "Consumi Discrezionali": GICSector.CONSUMER_DISCRETIONARY,
-    "Energia": GICSector.ENERGY,
-    "Finanziari": GICSector.FINANCIALS,
-    "Generi di largo consumo": GICSector.CONSUMER_STAPLES,
-    "IT": GICSector.INFORMATION_TECHNOLOGY,
-    "Immobili": GICSector.REAL_ESTATE,
-    "Imprese di servizi di pubblica utilità": GICSector.UTILITIES,
-    "Industriali": GICSector.INDUSTRIALS,
-    "Materiali": GICSector.MATERIALS,
-    "Salute": GICSector.HEALTH_CARE,
-    # iShares IT - bond ETF sectors (Bloomberg classification mapped to nearest GICS)
-    "Assicurazioni": GICSector.FINANCIALS,
-    "Attività bancarie": GICSector.FINANCIALS,
-    "Basic Industry": GICSector.MATERIALS,
-    "Beni di consumo ciclici": GICSector.CONSUMER_DISCRETIONARY,
-    "Beni indiretti": GICSector.CONSUMER_STAPLES,
-    "Brokerage/Asset Managers/Exchanges": GICSector.FINANCIALS,
-    "Certificato Immobiliare": GICSector.REAL_ESTATE,
-    "Comunicazioni": GICSector.COMMUNICATION_SERVICES,
-    "Consumer Non-Cyclical": GICSector.CONSUMER_STAPLES,
-    "Elettrico": GICSector.UTILITIES,
-    "Financial Other": GICSector.FINANCIALS,
-    "Gas Naturale": GICSector.ENERGY,
-    "Industrial Other": GICSector.INDUSTRIALS,
-    "Società finanziarie": GICSector.FINANCIALS,
-    "Trasporto": GICSector.INDUSTRIALS,
-    "Utility Other": GICSector.UTILITIES,
-    # Xtrackers IT
-    "Assistenza sanitaria": GICSector.HEALTH_CARE,
-    "Beni di prima necessità": GICSector.CONSUMER_STAPLES,
-    "Beni voluttuari": GICSector.CONSUMER_DISCRETIONARY,
-    "Finanza": GICSector.FINANCIALS,
-    "Immobiliare": GICSector.REAL_ESTATE,
-    "Industria": GICSector.INDUSTRIALS,
-    "Materie prime": GICSector.MATERIALS,
-    "Prodotti industriali": GICSector.INDUSTRIALS,
-    "Sanità": GICSector.HEALTH_CARE,
-    "Servizi di comunicazione": GICSector.COMMUNICATION_SERVICES,
-    "Servizi di pubblica utilità": GICSector.UTILITIES,
-    "Tecnologia": GICSector.INFORMATION_TECHNOLOGY,
-    "Tecnologia dell'informazione": GICSector.INFORMATION_TECHNOLOGY,
-    "Telecomunicazioni": GICSector.COMMUNICATION_SERVICES,
-    "Utenze": GICSector.UTILITIES,
-    "Aerospazio e difesa": GICSector.INDUSTRIALS,
-    "Trasporto aereo e logistica": GICSector.INDUSTRIALS,
-    "Servizi di consulenza IT e altri servizi correlati": GICSector.INFORMATION_TECHNOLOGY,
-    "Macchine per l'edilizia e autocarri pesanti": GICSector.INDUSTRIALS,
-    "Servizi di manutenzione e ambientali": GICSector.INDUSTRIALS,
-    "Trasmissioni via cavo e via satellite": GICSector.COMMUNICATION_SERVICES,
-    "Vettori alternativi": GICSector.INDUSTRIALS,
-    "Componenti e apparecchiature elettriche": GICSector.INDUSTRIALS,
-    "Apparecchiature e strumenti elettronici": GICSector.INDUSTRIALS,
-}
-
-_NO_SECTOR = {
-    "-",
-    "Altro",
-    "Aziendali",
-    "Coperto",
-    "Government Related",
-    "Liquidità e/o derivati",
-    "Owned No Guarantee",
-    "Securitizzato",
-    "Tesoro",
-    "sconosciuta",
-}
-
-
-def italian_to_gics(name: str) -> GICSector | None:
-    name = name.strip()
-    if not name or name == "-":
-        return None
-
-    if name in _NO_SECTOR:
-        return None
-    if name not in ITALIAN_TO_GICS:
-        _log.warning("Unknown sector name (not mapped to GICS): %r", name)
-    return ITALIAN_TO_GICS.get(name)
-
-
-def find_unmapped(names: list[str]) -> list[str]:
-    """Return unique names not present in ITALIAN_TO_GICS and not in _NO_SECTOR."""
-    return sorted(
-        {n for n in names if n not in ITALIAN_TO_GICS and n not in _NO_SECTOR}
-    )
+    COMMUNICATION_SERVICES = "COMMUNICATION SERVICES"
+    CONSUMER_DISCRETIONARY = "CONSUMER DISCRETIONARY"
+    CONSUMER_STAPLES = "CONSUMER STAPLES"
+    ENERGY = "ENERGY"
+    FINANCIALS = "FINANCIALS"
+    HEALTH_CARE = "HEALTH CARE"
+    INDUSTRIALS = "INDUSTRIALS"
+    INFORMATION_TECHNOLOGY = "INFORMATION TECHNOLOGY"
+    MATERIALS = "MATERIALS"
+    REAL_ESTATE = "REAL ESTATE"
+    UTILITIES = "UTILITIES"

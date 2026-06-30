@@ -1,17 +1,37 @@
 import pandas as pd
 
 from portfolio_scraper.etf.base import BaseEtfScraper
-from portfolio_scraper.utils.country import country_name_to_alpha_2
-from portfolio_scraper.utils.dataframe import rename_dataframe_columns
-from portfolio_scraper.utils.exchange import exchange_to_mic
-from portfolio_scraper.utils.sector import italian_to_gics
+from portfolio_scraper.utils.country import gen_country_to_alpha_2_map
+from portfolio_scraper.utils.dataframe import Column, ColumnType, map_columns
+from portfolio_scraper.utils.sector import GICSector
 
 
-class XtrackersScraper(BaseEtfScraper):
+class XtrackersBaseEtfScraper(BaseEtfScraper):
+    HOLDINGS_CSV_SEPARATOR = ";"
+
+    COUNTRY_LANGUAGE: str
     HOLDINGS_URL_TEMPLATE: str
     HOLDINGS_COLUMN_NAMES: dict[str, str]
-    HOLDINGS_CSV_SEPARATOR: str
-    COUNTRY_LANGUAGE: str
+    SECTORS_MAP: dict[str, GICSector]
+
+    def __init__(self):
+        super().__init__()
+
+        self.HOLDINGS_COLUMNS: dict[str, Column] = map_columns(
+            columns={
+                "name": Column(),
+                "isin": Column(),
+                "weight_in_etf": Column(col_type=ColumnType.NUMERIC),
+                "gics_sector": Column(mapper=self.SECTORS_MAP),
+                "country_alpha2": Column(
+                    mapper=gen_country_to_alpha_2_map(self.COUNTRY_LANGUAGE)
+                ),
+                "exchange": Column(),
+                "currency": Column(),
+                "rating": Column(),
+            },
+            columns_names=self.HOLDINGS_COLUMNS_NAMES,
+        )
 
     def _fetch_raw_listings(self) -> pd.DataFrame:
         raise NotImplementedError
@@ -26,15 +46,3 @@ class XtrackersScraper(BaseEtfScraper):
 
     def _fetch_raw_holdings_by_ticker(self, ticker: str) -> pd.DataFrame:
         raise NotImplementedError
-
-    def _prepare_holdings(self, df: pd.DataFrame) -> pd.DataFrame:
-        df = rename_dataframe_columns(df, self.HOLDINGS_COLUMN_NAMES)
-        df["location"] = df["location"].map(
-            country_name_to_alpha_2,
-            na_action="ignore",
-            language=self.COUNTRY_LANGUAGE,
-        )
-        df["exchange"] = df["exchange"].map(exchange_to_mic, na_action="ignore")
-        df["sector"] = df["sector"].map(italian_to_gics, na_action="ignore")
-        df = df.dropna(how="all")
-        return df

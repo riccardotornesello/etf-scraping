@@ -1,34 +1,62 @@
 import logging
 import pytest
 
-from portfolio_scraper import (
-    AmundiItScraper,
-    ISharesItScraper,
-    VanguardItScraper,
-    XtrackersItScraper,
-)
+import pandas as pd
+
+from portfolio_scraper.utils.dataframe import ColumnType
+from portfolio_scraper.utils.sector import GICSector
+
 
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 
 
+HOLDINGS_COLUMNS: dict[str, ColumnType] = {
+    # Basic information
+    "name": ColumnType.STRING,
+    "isin": ColumnType.STRING,
+    "ticker": ColumnType.STRING,
+    # ETF-specific information
+    "weight_in_etf": ColumnType.NUMERIC,  # Decimal between 0 and 1
+    # Generic holding information
+    "gics_sector": ColumnType.STRING,
+    "rating": ColumnType.STRING,
+    "asset_class": ColumnType.STRING,
+    "total_market_value": ColumnType.NUMERIC,
+    "total_notional_value": ColumnType.NUMERIC,
+    "shares_amount": ColumnType.NUMERIC,
+    "share_price": ColumnType.NUMERIC,
+    "country_alpha2": ColumnType.STRING,  # ISO 3166-1 alpha-2 country code
+    "exchange": ColumnType.STRING,  # MIC code (ISO 10383), None if unlisted
+    "currency": ColumnType.STRING,
+}
+
+
 @pytest.fixture(scope="module")
 def amundi_scraper():
+    from portfolio_scraper.etf.amundi.it import AmundiItScraper
+
     return AmundiItScraper()
 
 
 @pytest.fixture(scope="module")
 def ishares_scraper():
+    from portfolio_scraper.etf.ishares.it import ISharesItScraper
+
     return ISharesItScraper()
 
 
 @pytest.fixture(scope="module")
 def vanguard_scraper():
+    from portfolio_scraper.etf.vanguard.it import VanguardItScraper
+
     return VanguardItScraper()
 
 
 @pytest.fixture(scope="module")
 def xtrackers_scraper():
+    from portfolio_scraper.etf.xtrackers.it import XtrackersItScraper
+
     return XtrackersItScraper()
 
 
@@ -44,11 +72,38 @@ class ScraperTestBase:
     def test_get_holdings_does_not_raise(self):
         pass
 
-    def test_get_holdings_returns_result(self):
-        assert self.result is not None
-
     def test_get_holdings_is_nonempty(self):
+        assert self.result is not None
         assert len(self.result) > 0
+
+    def test_holdings_columns_format(self):
+        # Check that the columns in the result DataFrame match the expected columns and types
+        for col in self.result.columns:
+            assert col in HOLDINGS_COLUMNS
+            assert (
+                pd.api.types.is_numeric_dtype(self.result[col])
+                if HOLDINGS_COLUMNS[col] == ColumnType.NUMERIC
+                else True
+            )
+
+        # weight_in_etf should sum to 1.0 (or very close to it, allowing for rounding errors)
+        assert self.result["weight_in_etf"].sum() == pytest.approx(1.0, rel=1e-2)
+
+        # country_alpha2 should be a valid ISO 3166-1 alpha-2 country code (2-letter string)
+        assert (
+            self.result["country_alpha2"]
+            .dropna()
+            .apply(lambda x: isinstance(x, str) and len(x) == 2)
+            .all()
+        )
+
+        # gics_sector should be one of the GICSector enum values
+        assert (
+            self.result["gics_sector"]
+            .dropna()
+            .apply(lambda x: x in GICSector._value2member_map_)
+            .all()
+        )
 
 
 class TestAmundiItScraper(ScraperTestBase):

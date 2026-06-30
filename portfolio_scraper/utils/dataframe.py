@@ -1,5 +1,6 @@
 from enum import Enum
 from dataclasses import dataclass
+from typing import Callable
 
 import pandas as pd
 
@@ -13,19 +14,18 @@ class ColumnType(str, Enum):
 class Column:
     source: str | None = None
     col_type: ColumnType = ColumnType.STRING
+    mapper: dict[str, str] | None = None
+    formatter: Callable | None = None
 
 
-def rename_dataframe_columns(
-    df: pd.DataFrame,
-    column_names: dict[str, str],
-) -> pd.DataFrame:
-    # Keep only the columns we care about
-    df = df.reindex(columns=column_names.values())
-
-    # Rename columns to standard names
-    df = df.rename(columns={v: k for k, v in column_names.items()})
-
-    return df
+def map_columns(
+    columns: dict[str, Column],
+    columns_names: dict[str, str],
+) -> dict[str, Column]:
+    for col in columns:
+        if col in columns_names:
+            columns[col].source = columns_names[col]
+    return columns
 
 
 def prepare_dataframe(
@@ -41,6 +41,14 @@ def prepare_dataframe(
     # Keep only the columns we care about
     df = df.reindex(columns=set(c for c in columns.keys() if c))
 
+    # Drop rows where all values are NaN
+    df = df.dropna(how="all")
+
+    # Apply formatting
+    for col, col_info in columns.items():
+        if col_info.formatter:
+            df[col] = col_info.formatter(df[col])
+
     # Convert numeric columns to numeric types, coercing errors to NaN
     numeric_columns = [
         col
@@ -49,7 +57,20 @@ def prepare_dataframe(
     ]
     df[numeric_columns] = df[numeric_columns].apply(pd.to_numeric)
 
-    # TODO: format strings to uppercase
+    # Convert string columns to uppercase
+    string_columns = [
+        col
+        for col, col_info in columns.items()
+        if col_info.col_type == ColumnType.STRING
+    ]
+    df[string_columns] = df[string_columns].apply(
+        lambda col: col.astype(str).str.upper()
+    )
+
+    # Apply mapping to columns if specified
+    for col, col_info in columns.items():
+        if col_info.mapper:
+            df[col] = df[col].map(col_info.mapper)
 
     # Set index if specified
     if index_col:
