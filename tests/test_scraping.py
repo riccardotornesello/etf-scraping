@@ -98,6 +98,7 @@ class ScraperTestBase:
         )
 
         # gics_sector should be one of the GICSector enum values
+        # TODO: raise for values that are NaN because they are not valid GICSector values
         assert (
             self.result["gics_sector"]
             .dropna()
