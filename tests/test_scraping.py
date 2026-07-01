@@ -3,6 +3,7 @@ import pytest
 
 import pandas as pd
 
+from portfolio_scraper.utils.country import gen_country_to_alpha_2_map
 from portfolio_scraper.utils.dataframe import ColumnType
 from portfolio_scraper.utils.sector import GICSector
 
@@ -68,6 +69,7 @@ class ScraperTestBase:
     def setup(self, request):
         self.scraper = request.getfixturevalue(self.scraper_fixture)
         self.result = self.scraper.get_holdings_by_isin(self.ISIN)
+        self.raw_result = self.scraper._fetch_raw_holdings_by_isin(self.ISIN)
 
     def test_get_holdings_does_not_raise(self):
         pass
@@ -82,6 +84,7 @@ class ScraperTestBase:
             assert col in HOLDINGS_COLUMNS
             assert (
                 pd.api.types.is_numeric_dtype(self.result[col])
+                or pd.isnull(self.result[col]).all()
                 if HOLDINGS_COLUMNS[col] == ColumnType.NUMERIC
                 else True
             )
@@ -106,6 +109,23 @@ class ScraperTestBase:
             .all()
         )
 
+    def test_holdings_countries(self):
+        """
+        Test country_alpha2 mapping
+        """
+
+        if hasattr(self.scraper, "COUNTRY_LANGUAGE"):
+            column_name = self.scraper.HOLDINGS_COLUMNS["country_alpha2"].source
+            mapper = gen_country_to_alpha_2_map(self.scraper.COUNTRY_LANGUAGE)
+
+            countries = set(self.raw_result[column_name].dropna().str.upper().unique())
+            available_countries = mapper.keys()
+            unmapped_countries = sorted(countries - available_countries)
+
+            assert len(unmapped_countries) == 0, (
+                f"Unmapped countries: {unmapped_countries}"
+            )
+
 
 class TestAmundiItScraper(ScraperTestBase):
     ISIN = "LU1681048804"
@@ -123,5 +143,5 @@ class TestVanguardItScraper(ScraperTestBase):
 
 
 class TestXtrackersItScraper(ScraperTestBase):
-    ISIN = "LU3061478973"
+    ISIN = "LU0490618542"
     scraper_fixture = "xtrackers_scraper"

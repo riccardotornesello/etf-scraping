@@ -7,15 +7,19 @@ import pycountry
 WITHOUT_CODE = {"it": {"UNIONE EUROPEA"}}
 FIXES = {
     "it": {
-        "COREA": "KOREA, DEMOCRATIC PEOPLE'S REPUBLIC OF",
-        "MALESIA": "MALAYSIA",
-        "TAILANDIA": "THAILAND",
-        "TAIWAN": "TAIWAN, PROVINCE OF CHINA",
+        "COREA": "KR",
+        "MALESIA": "MY",
+        "TAILANDIA": "TH",
+        "TAIWAN": "TW",
+        "ISOLE VERGINE BRITANNICHE": "VG",
+        "PAESI BASSI (OLANDA)": "NL",
+        "REPUBBLICA DI COREA (COREA DEL SUD)": "KR",
+        "STATI UNITI D'AMERICA": "US",
     }
 }
 
 
-def gen_translation_map(language: str) -> dict[str, str]:
+def gen_countries_translation_map(language: str) -> dict[str, str]:
     translation = gettext.translation(
         "iso3166-1",
         pycountry.LOCALES_DIR,
@@ -27,7 +31,6 @@ def gen_translation_map(language: str) -> dict[str, str]:
         for k, v in translation._catalog.items()
         if k and v
     }
-    translation_map.update(FIXES.get(language, {}))
     return translation_map
 
 
@@ -38,7 +41,7 @@ def gen_country_to_alpha_2_map(language: str) -> dict[str, str]:
             country.name.upper(): country.alpha_2 for country in pycountry.countries
         }
 
-    translation_map = gen_translation_map(language)
+    translation_map = gen_countries_translation_map(language)
     country_to_alpha_2 = {}
     for name, english_name in translation_map.items():
         country = pycountry.countries.get(name=english_name)
@@ -49,4 +52,10 @@ def gen_country_to_alpha_2_map(language: str) -> dict[str, str]:
     )
     country_to_alpha_2[""] = None  # Handle empty string case
     country_to_alpha_2["-"] = None  # Handle dash case
+    country_to_alpha_2.update(FIXES.get(language, {}))  # Apply fixes
     return country_to_alpha_2
+
+
+@functools.cache
+def gen_alpha_3_to_alpha_2_map() -> dict[str, str]:
+    return {country.alpha_3: country.alpha_2 for country in pycountry.countries}

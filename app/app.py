@@ -4,6 +4,7 @@ import plotly.express as px
 import pycountry
 
 from portfolio_scraper.etf import (
+    AmundiItScraper,
     ISharesItScraper,
     XtrackersItScraper,
     VanguardItScraper,
@@ -44,9 +45,10 @@ if "etfs" not in st.session_state:
     st.session_state.etfs = pd.DataFrame(columns=["ISIN", "Scraper", "Value"])
 if "scrapers" not in st.session_state:
     st.session_state.scrapers = {
+        "Amundi (IT)": AmundiItScraper(),
         "iShares (IT)": ISharesItScraper(),
-        "Xtrackers (IT)": XtrackersItScraper(),
         "Vanguard (IT)": VanguardItScraper(),
+        "Xtrackers (IT)": XtrackersItScraper(),
     }
 if "holdings" not in st.session_state:
     st.session_state.holdings = None
@@ -141,6 +143,8 @@ if not st.session_state.etfs.empty:
                 scraper = st.session_state.scrapers[row["Scraper"]]
                 etf_holdings = scraper.get_holdings_by_isin(row["ISIN"])
                 etf_holdings["etf_value"] = row["Value"]
+                etf_holdings["etf_isin"] = row["ISIN"]
+                etf_holdings["etf_scraper"] = row["Scraper"]
                 holdings.append(etf_holdings)
 
             holdings_df = pd.concat(holdings, ignore_index=True)

@@ -18,6 +18,26 @@ LISTINGS_COLUMNS: dict[str, Column] = {
     "profit_distribution_strategy": Column(),  # TODO: enum
 }
 
+ALLOWED_HOLDINGS_COLUMNS: list[str] = [
+    # Basic information
+    "name",
+    "isin",
+    "ticker",
+    # ETF-specific information
+    "weight_in_etf",
+    # Generic holding information
+    "gics_sector",
+    "rating",
+    "asset_class",
+    "total_market_value",
+    "total_notional_value",
+    "shares_amount",
+    "share_price",
+    "country_alpha2",
+    "exchange",
+    "currency",
+]
+
 
 class BaseEtfScraper(ABC):
     """
@@ -103,5 +123,9 @@ class BaseEtfScraper(ABC):
         Rename the columns and update the output.
         Can be overridden by subclasses for custom processing.
         """
-        df = prepare_dataframe(df, self.HOLDINGS_COLUMNS)
+        df = prepare_dataframe(
+            df,
+            self.HOLDINGS_COLUMNS,
+            all_columns=ALLOWED_HOLDINGS_COLUMNS,
+        )
         return df

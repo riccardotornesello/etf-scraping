@@ -32,6 +32,7 @@ def prepare_dataframe(
     df: pd.DataFrame,
     columns: dict[str, Column],
     index_col: str | None = None,
+    all_columns: list[str] | None = None,
 ) -> pd.DataFrame:
     # Rename columns to standard names if source is specified
     df = df.rename(
@@ -71,6 +72,12 @@ def prepare_dataframe(
     for col, col_info in columns.items():
         if col_info.mapper:
             df[col] = df[col].map(col_info.mapper)
+
+    # Add any additional columns with NaN values if specified
+    if all_columns:
+        for col in all_columns:
+            if col not in df.columns:
+                df[col] = pd.NA
 
     # Set index if specified
     if index_col:
